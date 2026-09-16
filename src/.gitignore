@@ -1,0 +1,10 @@
+# Visual Studio user settings and cache
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
+*.aps
+
+# Build output
+out/

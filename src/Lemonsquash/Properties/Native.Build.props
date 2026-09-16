@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <LemonsquashRoot>$(MSBuildThisFileDirectory)..\..\</LemonsquashRoot>
+    <LemonsquashOutputRoot Condition="'$(LemonsquashOutputRoot)' == ''">$(LemonsquashRoot)out\</LemonsquashOutputRoot>
+    <OutDir>$(LemonsquashOutputRoot)$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(LemonsquashOutputRoot)obj\$(Platform)\$(Configuration)\$(MSBuildProjectName)\</IntDir>
+    <TargetName>$(MSBuildProjectName)</TargetName>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <RuntimeLibrary Condition="'$(Configuration)' == 'Debug'">MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)' != 'Debug'">MultiThreaded</RuntimeLibrary>
+      <Optimization Condition="'$(Configuration)' == 'Debug'">Disabled</Optimization>
+      <Optimization Condition="'$(Configuration)' != 'Debug'">MaxSpeed</Optimization>
+      <FunctionLevelLinking Condition="'$(Configuration)' != 'Debug'">true</FunctionLevelLinking>
+      <IntrinsicFunctions Condition="'$(Configuration)' != 'Debug'">true</IntrinsicFunctions>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PreprocessorDefinitions Condition="'$(Configuration)' == 'Debug'">_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)' != 'Debug'">NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <OptimizeReferences Condition="'$(Configuration)' != 'Debug'">true</OptimizeReferences>
+      <EnableCOMDATFolding Condition="'$(Configuration)' != 'Debug'">true</EnableCOMDATFolding>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

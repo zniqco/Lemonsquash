@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{2A7E36E3-515D-4456-845A-7B22B03EC32F}</UniqueIdentifier>
+      <Extensions>cpp;c</Extensions>
+    </Filter>
+    <Filter Include="Modules">
+      <UniqueIdentifier>{580F7BCE-9D9B-4EB8-A40A-32953786E6B4}</UniqueIdentifier>
+      <Extensions>ixx</Extensions>
+    </Filter>
+    <Filter Include="Modules\UI">
+      <UniqueIdentifier>{CB033C92-89A1-4DC9-AF18-CBA993A25D66}</UniqueIdentifier>
+      <Extensions>ixx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{0B678D39-38ED-43A9-A6DF-C9DDB26E06D0}</UniqueIdentifier>
+      <Extensions>h;hpp</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{F3C47F87-52DD-4895-B9D4-CE65D8901E2C}</UniqueIdentifier>
+      <Extensions>rc;ico;png;manifest;cer</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="App.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\MainDialog.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\NotifyIcon.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Window.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Dialog.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Control.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Button.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\CheckBox.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\TabControl.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Edit.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\HotkeyEdit.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Label.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\ComboBox.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\LinkImage.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\LinkLabel.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Monitor.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\PreferencesDialog.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\AboutDialog.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Theme.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Backend.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Http.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Calculator.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Common.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="LazyResource.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="UI\Bitmap.ixx">
+      <Filter>Modules\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Search.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Settings.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Updater.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Signature.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Platform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resources.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.manifest">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Assets\Lemonsquash.cer">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\Icon.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\Logo.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\Calculator.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\Google.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\Setting.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="Assets\Terminal.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+</Project>

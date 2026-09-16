@@ -1,0 +1,23 @@
+#pragma once
+
+#include <windows.h>
+#include <shellapi.h>
+#include <shlobj.h>
+#include <winrt/base.h>
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <deque>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <unordered_map>
+#include <vector>

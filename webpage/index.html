@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f8f5">
+    <title>Lemonsquash</title>
+    <link rel="icon" href="./assets/favicon.ico" sizes="32x32">
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" sizes="any">
+    <link rel="stylesheet" href="./style.css">
+    <script src="./app.js" defer></script>
+    <script src="./download.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="page">
+      <main id="main">
+        <section class="hero" aria-labelledby="hero-title">
+          <h1 id="hero-title"><img class="logo" src="./assets/logo.svg" alt="Lemonsquash" width="320" height="67"></h1>
+
+          <div class="demo-panel" aria-label="Lemonsquash demo">
+            <div class="demo-stage">
+              <div class="launcher" aria-hidden="true">
+                <div class="launcher-input"><span id="typed-text"></span><span class="caret"></span></div>
+                <div class="launcher-results" id="launcher-results"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="download-area" id="download">
+            <div class="download-actions">
+              <a class="download-button" id="download-link" href="#">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/></svg>
+                <span id="download-label">Download latest version</span>
+              </a>
+            </div>
+            <p class="download-meta">Windows 10 1803 or later</p>
+            <footer class="site-footer">
+              <p>by <a href="https://zniq.co/">zniq</a> / <a href="https://github.com/zniqco/Lemonsquash" target="_blank" rel="noopener noreferrer">GitHub</a></p>
+            </footer>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
