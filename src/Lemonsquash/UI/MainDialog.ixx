@@ -388,14 +388,25 @@ export namespace Lemonsquash {
             }
 
             bool canElevate = item.action == Action::Shell || item.action == Action::Shortcut || item.action == Action::Appx;
+            bool canRun = canElevate || item.action == Action::ControlPanel;
             bool elevate = canElevate && (GetKeyState(VK_CONTROL) & 0x8000);
             auto description = item.description;
 
-            if (canElevate) {
+            if (canRun) {
                 description = elevate ? L"Run as administrator" : L"Run";
 
                 if (item.action == Action::Shortcut && !item.resolvedTarget.empty())
                     description += L" · " + item.resolvedTarget;
+                else if (item.action == Action::Appx && !item.target.empty()) {
+                    auto displayId = item.target;
+                    auto separator = displayId.find(L'!');
+                    auto publisher = displayId.rfind(L'_', separator);
+                    if (separator != std::wstring::npos && separator + 1 < displayId.size() &&
+                        displayId.find(L'!', separator + 1) == std::wstring::npos &&
+                        publisher != std::wstring::npos && publisher != 0 && publisher + 1 < separator)
+                        displayId.erase(publisher, separator - publisher);
+                    description += L" · " + displayId;
+                }
             }
 
             if (description.empty()) {

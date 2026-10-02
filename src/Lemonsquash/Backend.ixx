@@ -9,6 +9,8 @@ module;
 #include <winrt/Windows.Management.Deployment.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Data.Json.h>
+#include <winrt/Windows.Data.Xml.Dom.h>
+#include <winrt/Windows.Storage.h>
 
 export module lemonsquash.backend;
 
@@ -232,6 +234,70 @@ namespace Lemonsquash {
             return apps;
         }
 
+        using PackageAliases = std::unordered_map<std::wstring, std::vector<SearchAlias>>;
+
+        PackageAliases ReadManifestAliases(std::string_view xml) {
+            PackageAliases aliases;
+            // LoadXml expects XML text, not a byte-order mark retained after UTF-8 decoding.
+            if (xml.starts_with("\xEF\xBB\xBF"))
+                xml.remove_prefix(3);
+            if (xml.empty())
+                return aliases;
+            int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, xml.data(),
+                static_cast<int>(xml.size()), nullptr, 0);
+            if (!length)
+                return aliases;
+            std::wstring decoded(length, L'\0');
+            if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, xml.data(),
+                    static_cast<int>(xml.size()), decoded.data(), length))
+                return aliases;
+
+            winrt::Windows::Data::Xml::Dom::XmlDocument document;
+            auto documentIO = document.as<winrt::Windows::Data::Xml::Dom::IXmlDocumentIO>();
+            winrt::hstring text(decoded);
+            // Invalid/unreadable package metadata is an ordinary fallback, not a thrown exception.
+            auto* documentABI = static_cast<winrt::impl::abi_t<winrt::Windows::Data::Xml::Dom::IXmlDocumentIO>*>(
+                winrt::get_abi(documentIO));
+            HRESULT status = documentABI->LoadXml(winrt::get_abi(text));
+            if (FAILED(status)) {
+                Log(L"Package manifest XML unavailable; display name remains searchable");
+                return aliases;
+            }
+            for (const auto& application : document.SelectNodes(L"//*[local-name()='Application']")) {
+                auto id = application.Attributes().GetNamedItem(L"Id");
+                if (!id)
+                    continue;
+                auto& names = aliases[std::wstring(id.InnerText())];
+                auto add = [&](const winrt::Windows::Data::Xml::Dom::IXmlNode& attribute) {
+                    if (!attribute)
+                        return;
+                    auto name = fs::path(std::wstring(attribute.InnerText())).stem().wstring();
+                    auto lower = Lower(name);
+                    if (!name.empty() && std::none_of(names.begin(), names.end(),
+                            [&](const SearchAlias& alias) { return alias.lowerText == lower; }))
+                        names.push_back({std::move(name), std::move(lower)});
+                };
+                add(application.Attributes().GetNamedItem(L"Executable"));
+                for (const auto& alias : application.SelectNodes(L".//*[local-name()='ExecutionAlias']"))
+                    add(alias.Attributes().GetNamedItem(L"Alias"));
+            }
+            return aliases;
+        }
+
+        PackageAliases ReadPackageAliases(const winrt::Windows::ApplicationModel::Package& package) {
+            try {
+                auto location = fs::path(std::wstring(package.InstalledLocation().Path()));
+                std::ifstream manifest(location / L"AppxManifest.xml", std::ios::binary);
+                if (!manifest)
+                    return {};
+                std::string xml((std::istreambuf_iterator<char>(manifest)), {});
+                return ReadManifestAliases(xml);
+            } catch (...) {
+                Log(L"Package executable aliases unavailable; display name remains searchable");
+                return {};
+            }
+        }
+
         std::vector<AppEntry> EnumeratePackages(std::stop_token stop) {
             std::vector<AppEntry> apps;
 
@@ -260,6 +326,7 @@ namespace Lemonsquash {
                                 operation.Cancel();
                                 continue;
                             }
+                            auto aliases = ReadPackageAliases(package);
                             for (const auto& entry : operation.get()) {
                                 std::wstring id(entry.AppUserModelId()), caption(entry.DisplayInfo().DisplayName());
 
@@ -274,6 +341,12 @@ namespace Lemonsquash {
                                     {},
                                     {},
                                     Action::Appx});
+                                auto separator = id.find(L'!');
+                                if (separator != std::wstring::npos) {
+                                    auto found = aliases.find(id.substr(separator + 1));
+                                    if (found != aliases.end())
+                                        apps.back().aliases = found->second;
+                                }
                             }
                         } catch (...) {
                             Log(L"Skipped unavailable package");
@@ -581,6 +654,10 @@ export namespace Lemonsquash {
         }
 
     public:
+        static auto ParseManifestAliases(std::string_view xml) {
+            return ReadManifestAliases(xml);
+        }
+
         explicit Backend(HWND target)
             : window(target) {
             catalogThread = std::jthread([this](auto stop) {
