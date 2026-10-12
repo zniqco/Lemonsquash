@@ -223,7 +223,7 @@ namespace Lemonsquash {
                         auto tag = target.empty() ? path.stem().wstring() : fs::path(target).stem().wstring();
                         AppEntry app{L"lnk:" + Lower(path.wstring()), caption, tag, path.wstring(), path.wstring()};
                         app.hasArguments = hasArguments;
-                        app.resolvedTarget = std::move(target);
+                        app.displayTarget = std::move(target);
                         apps.push_back(std::move(app));
                     } catch (...) {
                         Log(L"Skipped unreadable shortcut: " + path.wstring());
@@ -232,6 +232,22 @@ namespace Lemonsquash {
             }
 
             return apps;
+        }
+
+        // Drops the publisher ID: Microsoft.WindowsCalculator_8wekyb3d8bbwe!App -> Microsoft.WindowsCalculator!App
+        std::wstring ShortAppUserModelId(std::wstring_view id) {
+            auto separator = id.find(L'!');
+
+            if (separator == std::wstring_view::npos || separator + 1 == id.size() ||
+                id.find(L'!', separator + 1) != std::wstring_view::npos)
+                return std::wstring(id);
+
+            auto publisher = id.rfind(L'_', separator);
+
+            if (publisher == std::wstring_view::npos || publisher == 0 || publisher + 1 == separator)
+                return std::wstring(id);
+
+            return std::wstring(id.substr(0, publisher)) + std::wstring(id.substr(separator));
         }
 
         using PackageAliases = std::unordered_map<std::wstring, std::vector<SearchAlias>>;
@@ -354,6 +370,7 @@ namespace Lemonsquash {
                                     {},
                                     {},
                                     Action::Appx});
+                                apps.back().displayTarget = ShortAppUserModelId(id);
 
                                 auto separator = id.find(L'!');
                                 if (separator != std::wstring::npos) {

@@ -95,8 +95,8 @@
     <ClCompile Include="Common.ixx">
       <Filter>Modules</Filter>
     </ClCompile>
-    <ClCompile Include="LazyResource.ixx">
-      <Filter>Modules</Filter>
+    <ClCompile Include="UI\LazyResource.ixx">
+      <Filter>Modules\UI</Filter>
     </ClCompile>
     <ClCompile Include="UI\Bitmap.ixx">
       <Filter>Modules\UI</Filter>

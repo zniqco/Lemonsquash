@@ -31,6 +31,7 @@ namespace Lemonsquash {
         constexpr int InputHeight = 56, InputPadding = 10, RowHeight = 52, BottomPadding = 6;
         constexpr int InputTextOffsetY = 3, ResultsTopPadding = 6, ResultTextOffsetY = 0;
         constexpr int ResultsSidePadding = 8, RowSideInset = 1;
+        constexpr int MaxVisibleRows = 6;
         constexpr D2D1_RECT_F ResultIconRect{10, 10, 42, 42};
         const std::wstring CalculatorIconId = L"builtin:calculator";
         const std::wstring GoogleIconId = L"builtin:google";
@@ -213,7 +214,6 @@ export namespace Lemonsquash {
         std::function<void(const std::wstring&)> suggest;
         std::function<void(const std::wstring&, const std::wstring&)> requestIcon;
         std::function<void(const Result&, bool)> execute;
-        std::function<void()> showPreferences;
         std::function<std::optional<LRESULT>(HWND, UINT, WPARAM, LPARAM)> message;
     };
 
@@ -338,7 +338,7 @@ export namespace Lemonsquash {
             auto px = [&](int n) {
                 return Pixels(n, dpi);
             };
-            int rows = static_cast<int>(std::min(size_t(6), results.size()));
+            int rows = static_cast<int>(std::min<size_t>(MaxVisibleRows, results.size()));
             int width = px(640), x = 0, y = 0;
             UINT flags = SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE;
             auto monitor = reposition ? PlacementMonitor() : Monitor::FromWindow(handle);
@@ -589,18 +589,8 @@ export namespace Lemonsquash {
             if (canRun) {
                 description = elevate ? L"Run as administrator" : L"Run";
 
-                if (item.action == Action::Shortcut && !item.resolvedTarget.empty())
-                    description += L" · " + item.resolvedTarget;
-                else if (item.action == Action::Appx && !item.target.empty()) {
-                    auto displayId = item.target;
-                    auto separator = displayId.find(L'!');
-                    auto publisher = displayId.rfind(L'_', separator);
-                    if (separator != std::wstring::npos && separator + 1 < displayId.size() &&
-                        displayId.find(L'!', separator + 1) == std::wstring::npos &&
-                        publisher != std::wstring::npos && publisher != 0 && publisher + 1 < separator)
-                        displayId.erase(publisher, separator - publisher);
-                    description += L" · " + displayId;
-                }
+                if (!item.displayTarget.empty())
+                    description += L" · " + item.displayTarget;
             }
 
             if (description.empty()) {
@@ -733,6 +723,22 @@ export namespace Lemonsquash {
 
                 suppressQuery = false;
             }
+        }
+
+        // Scrolls and moves the selection together, so the selected row keeps its place on screen.
+        void Page(int rows) {
+            if (results.empty())
+                return;
+
+            int last = std::max(0, static_cast<int>(results.size()) - visibleRows);
+            int top = std::clamp(topIndex + rows, 0, last);
+
+            if (top != topIndex) {
+                topIndex = top;
+                InvalidateRect(handle, nullptr, FALSE);
+            }
+
+            Select(selectedIndex + rows, true);
         }
 
         void Execute() {
@@ -914,12 +920,8 @@ export namespace Lemonsquash {
                     int steps = wheelDelta / WHEEL_DELTA;
                     wheelDelta %= WHEEL_DELTA;
 
-                    UINT lines = 3;
-                    SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0);
-
-                    int amount = lines == WHEEL_PAGESCROLL ? visibleRows : static_cast<int>(std::min(lines, 100u));
                     int last = std::max(0, static_cast<int>(results.size()) - visibleRows);
-                    int next = std::clamp(topIndex - steps * amount, 0, last);
+                    int next = std::clamp(topIndex - steps, 0, last);
 
                     if (next != topIndex) {
                         topIndex = next;
@@ -1020,6 +1022,15 @@ export namespace Lemonsquash {
             if (message == WM_IME_ENDCOMPOSITION)
                 self->composing = false;
 
+            if (message == WM_IME_COMPOSITION && (l & GCS_RESULTSTR)) {
+                bool wasSuppressed = self->suppressQuery;
+                self->suppressQuery = true;
+                auto result = DefSubclassProc(control, message, w, l);
+                self->suppressQuery = wasSuppressed;
+
+                return result;
+            }
+
             if (message == WM_KEYDOWN && !self->composing) {
                 try {
                     int index = self->selectedIndex;
@@ -1028,19 +1039,20 @@ export namespace Lemonsquash {
 
                     if (w == VK_UP || w == VK_DOWN || w == VK_PRIOR || w == VK_NEXT) {
                         if (count) {
-                            int step = w == VK_UP ? -1 : w == VK_DOWN ? 1
-                                : w == VK_PRIOR  ? -6
-                                : 6;
+                            if (w == VK_PRIOR || w == VK_NEXT) {
+                                self->Page(w == VK_PRIOR ? -MaxVisibleRows : MaxVisibleRows);
+                            } else {
+                                int next = index + (w == VK_UP ? -1 : 1);
 
-                            int next = index + step;
+                                if (!repeat && next < 0)
+                                    next = count - 1;
 
-                            if (!repeat && step == -1 && next < 0)
-                                next = count - 1;
+                                if (!repeat && next >= count)
+                                    next = 0;
 
-                            if (!repeat && step == 1 && next >= count)
-                                next = 0;
+                                self->Select(next, true);
+                            }
 
-                            self->Select(next, true);
                             GetCursorPos(&self->lastMouse);
                             self->ignoreMouse = true;
                         }
@@ -1057,13 +1069,6 @@ export namespace Lemonsquash {
 
                     if (w == VK_ESCAPE) {
                         self->Hide(false);
-
-                        return 0;
-                    }
-
-                    if (w == VK_F1) {
-                        if (self->callbacks.showPreferences)
-                            self->callbacks.showPreferences();
 
                         return 0;
                     }
