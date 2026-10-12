@@ -310,8 +310,6 @@ export namespace Lemonsquash {
 
         void SetFont(HFONT font, bool redraw = true) {
             if (handle) {
-                auto previousFont = textFont;
-
                 if (textFont.Get() != font)
                     textFont.Reset();
 

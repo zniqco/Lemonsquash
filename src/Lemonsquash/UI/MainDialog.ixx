@@ -8,6 +8,7 @@ module;
 #include <dwrite.h>
 #include <imm.h>
 #include <initguid.h>
+#include <type_traits>
 #include <uxtheme.h>
 #include <wincodec.h>
 #include <windowsx.h>
@@ -35,6 +36,138 @@ namespace Lemonsquash {
         const std::wstring GoogleIconId = L"builtin:google";
         const std::wstring SettingsIconId = L"builtin:settings";
         const std::wstring TerminalIconId = L"builtin:terminal";
+
+        class ShellContextMenu {
+            static constexpr UINT FirstCommand = 1, LastCommand = 0x7fff;
+            std::unique_ptr<std::remove_pointer_t<PIDLIST_ABSOLUTE>, decltype(&CoTaskMemFree)> item{nullptr, CoTaskMemFree};
+            winrt::com_ptr<IContextMenu> menuCommands;
+            winrt::com_ptr<IContextMenu2> menuMessageHandler;
+            winrt::com_ptr<IContextMenu3> menuMessageHandlerWithResult;
+            std::unique_ptr<std::remove_pointer_t<HMENU>, decltype(&DestroyMenu)> menu{nullptr, DestroyMenu};
+
+            void RemoveCreateShortcut() {
+                for (int position = GetMenuItemCount(menu.get()) - 1; position >= 0; --position) {
+                    UINT command = GetMenuItemID(menu.get(), position);
+
+                    if (command < FirstCommand || command > LastCommand)
+                        continue;
+
+                    wchar_t verb[64]{};
+                    auto read = menuCommands->GetCommandString(command - FirstCommand, GCS_VERBW, nullptr,
+                        reinterpret_cast<char*>(verb), 64);
+                    bool createShortcut = SUCCEEDED(read) && std::wstring_view(verb) == L"link";
+
+                    if (FAILED(read) || !verb[0]) {
+                        char ansiVerb[64]{};
+                        read = menuCommands->GetCommandString(command - FirstCommand, GCS_VERBA, nullptr, ansiVerb, 64);
+                        createShortcut = SUCCEEDED(read) && std::string_view(ansiVerb) == "link";
+                    }
+
+                    if (createShortcut)
+                        winrt::check_bool(DeleteMenu(menu.get(), position, MF_BYPOSITION));
+                }
+            }
+
+            void RemoveRedundantSeparators() {
+                bool previousSeparator = true;
+
+                for (int position = 0; position < GetMenuItemCount(menu.get());) {
+                    MENUITEMINFOW info{sizeof(info)};
+                    info.fMask = MIIM_FTYPE;
+                    winrt::check_bool(GetMenuItemInfoW(menu.get(), position, TRUE, &info));
+                    bool separator = (info.fType & MFT_SEPARATOR) != 0;
+
+                    if (separator && previousSeparator) {
+                        winrt::check_bool(DeleteMenu(menu.get(), position, MF_BYPOSITION));
+                        continue;
+                    }
+
+                    previousSeparator = separator;
+                    ++position;
+                }
+
+                int count = GetMenuItemCount(menu.get());
+
+                if (previousSeparator && count > 0)
+                    winrt::check_bool(DeleteMenu(menu.get(), count - 1, MF_BYPOSITION));
+            }
+
+        public:
+            bool Show(HWND owner, const std::wstring& path, POINT position) {
+                PIDLIST_ABSOLUTE value = nullptr;
+                auto parsed = SHParseDisplayName(path.c_str(), nullptr, &value, 0, nullptr);
+                item.reset(value);
+                winrt::check_hresult(parsed);
+
+                winrt::com_ptr<IShellFolder> parent;
+                PCUITEMID_CHILD child = nullptr;
+                winrt::check_hresult(SHBindToParent(item.get(), IID_PPV_ARGS(parent.put()), &child));
+                winrt::check_hresult(parent->GetUIObjectOf(owner, 1, &child, IID_IContextMenu, nullptr, menuCommands.put_void()));
+                menuMessageHandlerWithResult = menuCommands.try_as<IContextMenu3>();
+                menuMessageHandler = menuCommands.try_as<IContextMenu2>();
+
+                menu.reset(CreatePopupMenu());
+                winrt::check_bool(menu != nullptr);
+                UINT flags = CMF_NORMAL;
+
+                if (GetKeyState(VK_SHIFT) & 0x8000)
+                    flags |= CMF_EXTENDEDVERBS;
+
+                winrt::check_hresult(menuCommands->QueryContextMenu(menu.get(), 0, FirstCommand, LastCommand, flags));
+
+                RemoveCreateShortcut();
+                RemoveRedundantSeparators();
+
+                UINT command = TrackPopupMenuEx(menu.get(), TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                    position.x, position.y, owner, nullptr);
+
+                if (!command)
+                    return false;
+
+                CMINVOKECOMMANDINFOEX info{sizeof(info)};
+                info.fMask = CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE;
+                info.hwnd = owner;
+                info.lpVerb = MAKEINTRESOURCEA(command - FirstCommand);
+                info.lpVerbW = MAKEINTRESOURCEW(command - FirstCommand);
+                info.nShow = SW_SHOWNORMAL;
+                info.ptInvoke = position;
+
+                if (GetKeyState(VK_CONTROL) & 0x8000)
+                    info.fMask |= CMIC_MASK_CONTROL_DOWN;
+
+                if (GetKeyState(VK_SHIFT) & 0x8000)
+                    info.fMask |= CMIC_MASK_SHIFT_DOWN;
+
+                auto invoked = menuCommands->InvokeCommand(reinterpret_cast<CMINVOKECOMMANDINFO*>(&info));
+
+                if (invoked == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                    return false;
+
+                winrt::check_hresult(invoked);
+                return true;
+            }
+
+            std::optional<LRESULT> Message(UINT message, WPARAM w, LPARAM l) {
+                if (message != WM_INITMENUPOPUP && message != WM_DRAWITEM &&
+                    message != WM_MEASUREITEM && message != WM_MENUCHAR)
+                    return {};
+
+                if ((message == WM_DRAWITEM || message == WM_MEASUREITEM) && w != 0)
+                    return {};
+
+                LRESULT result = 0;
+
+                if (menuMessageHandlerWithResult &&
+                    menuMessageHandlerWithResult->HandleMenuMsg2(message, w, l, &result) == S_OK)
+                    return result;
+
+                if (menuMessageHandler && message != WM_MENUCHAR &&
+                    menuMessageHandler->HandleMenuMsg(message, w, l) == S_OK)
+                    return message == WM_INITMENUPOPUP ? 0 : TRUE;
+
+                return {};
+            }
+        };
 
         D2D1_COLOR_F Color(COLORREF c) {
             return D2D1::ColorF(GetRValue(c) / 255.0f, GetGValue(c) / 255.0f, GetBValue(c) / 255.0f);
@@ -103,6 +236,7 @@ export namespace Lemonsquash {
         std::wstring query;
         const Settings& settings;
         MainDialogCallbacks callbacks;
+        ShellContextMenu* contextMenu = nullptr;
 
         std::shared_ptr<const std::vector<AppEntry>> apps = std::make_shared<const std::vector<AppEntry>>();
         std::vector<Result> results, appResults;
@@ -285,8 +419,7 @@ export namespace Lemonsquash {
             return {side, top, client.right - side, top + visibleRows * Pixels(RowHeight, dpi)};
         }
 
-        int ResultFromPoint(LPARAM l) const {
-            POINT point{GET_X_LPARAM(l), GET_Y_LPARAM(l)};
+        int ResultFromPoint(POINT point) const {
             auto area = ResultsRect();
 
             if (!PtInRect(&area, point))
@@ -295,6 +428,67 @@ export namespace Lemonsquash {
             int index = topIndex + (point.y - area.top) / Pixels(RowHeight, dpi);
 
             return index < static_cast<int>(results.size()) ? index : -1;
+        }
+
+        void ShowContextMenu(POINT position) {
+            if (hiding || contextMenu || results.empty())
+                return;
+
+            int index = selectedIndex;
+
+            if (position.x == -1 && position.y == -1) {
+                Select(index, false);
+                auto area = ResultsRect();
+                position = {area.left + Pixels(12, dpi),
+                    area.top + (index - topIndex + 1) * Pixels(RowHeight, dpi)};
+                ClientToScreen(handle, &position);
+            } else {
+                POINT client = position;
+                ScreenToClient(handle, &client);
+                index = ResultFromPoint(client);
+
+                if (index < 0)
+                    return;
+
+                Select(index, false);
+            }
+
+            // Keep the clicked item's identity stable while the menu pumps backend updates.
+            auto result = results[index];
+            std::wstring path;
+
+            switch (result.action) {
+                case Action::Shortcut:
+                case Action::ControlPanel:
+                    path = result.target;
+                    break;
+                case Action::Appx:
+                    path = L"shell:AppsFolder\\" + result.target;
+                    break;
+                default:
+                    return;
+            }
+
+            ShellContextMenu menu;
+            bool executed = false;
+
+            {
+                struct ResetContextMenu {
+                    ShellContextMenu*& active;
+                    ~ResetContextMenu() { active = nullptr; }
+                } reset{contextMenu};
+
+                contextMenu = &menu;
+                executed = menu.Show(handle, path, position);
+            }
+
+            GetCursorPos(&lastMouse);
+            ignoreMouse = true;
+
+            if (executed)
+                Hide(true);
+            else if (GetForegroundWindow() != handle && !hiding)
+                Hide(false);
         }
 
         void Paint() {
@@ -587,6 +781,11 @@ export namespace Lemonsquash {
         }
 
         LRESULT Message(UINT message, WPARAM w, LPARAM l) {
+            if (contextMenu) {
+                if (auto result = contextMenu->Message(message, w, l))
+                    return *result;
+            }
+
             switch (message) {
                 case WM_CREATE: {
                     CreateControls();
@@ -666,7 +865,7 @@ export namespace Lemonsquash {
                 }
 
                 case WM_ACTIVATE: {
-                    if (LOWORD(w) == WA_INACTIVE && !hiding)
+                    if (LOWORD(w) == WA_INACTIVE && !hiding && !contextMenu)
                         Hide(false);
 
                     return 0;
@@ -687,19 +886,25 @@ export namespace Lemonsquash {
 
                     ignoreMouse = false;
 
-                    if (auto index = ResultFromPoint(l); index >= 0)
+                    if (auto index = ResultFromPoint({GET_X_LPARAM(l), GET_Y_LPARAM(l)}); index >= 0)
                         Select(index, false);
 
                     return 0;
                 }
 
                 case WM_LBUTTONUP: {
-                    if (auto index = ResultFromPoint(l); index >= 0) {
+                    if (auto index = ResultFromPoint({GET_X_LPARAM(l), GET_Y_LPARAM(l)}); index >= 0) {
                         Select(index, false);
                         Execute();
                     } else {
                         SetFocus(input);
                     }
+
+                    return 0;
+                }
+
+                case WM_CONTEXTMENU: {
+                    ShowContextMenu({GET_X_LPARAM(l), GET_Y_LPARAM(l)});
 
                     return 0;
                 }
@@ -801,6 +1006,9 @@ export namespace Lemonsquash {
                 InvalidateRect(self->handle, nullptr, FALSE);
 
             if (message == WM_MOUSEWHEEL)
+                return SendMessageW(self->handle, message, w, l);
+
+            if (message == WM_CONTEXTMENU && GET_X_LPARAM(l) == -1 && GET_Y_LPARAM(l) == -1)
                 return SendMessageW(self->handle, message, w, l);
 
             if ((message == WM_KEYDOWN && w == VK_TAB) || (message == WM_CHAR && w == L'\t'))
