@@ -235,6 +235,77 @@ namespace Lemonsquash {
                 throw;
             }
         }
+
+        fs::path DownloadPackage(const std::wstring& version, std::stop_token stop) {
+            auto staging = UpdateCachePath();
+            std::error_code ignored;
+
+            fs::remove_all(staging, ignored);
+            fs::create_directories(staging);
+
+            auto archive = staging / L"package.zip";
+            std::ofstream output(archive, std::ios::binary);
+
+            HttpDownload(std::wstring(ServiceUrl) + L"/updates/" + version + L".zip", MaxPackageSize, stop,
+                [&](std::span<const uint8_t> chunk) {
+                    output.write(reinterpret_cast<const char*>(chunk.data()), static_cast<std::streamsize>(chunk.size()));
+                });
+
+            CheckCancelled(stop);
+            output.close();
+
+            if (!output)
+                throw std::runtime_error("Cannot save the update ZIP; check free space and folder permissions");
+
+            return archive;
+        }
+
+        fs::path PreparePayload(const fs::path& archive, const std::array<unsigned, 4>& expected, std::stop_token stop) {
+            auto payload = archive.parent_path() / L"Lemonsquash.exe";
+
+            ExtractExecutable(archive, payload, stop);
+            ValidateExecutable(payload, expected);
+            VerifyExecutableSignature(payload);
+            CheckCancelled(stop);
+
+            return payload;
+        }
+
+        // Stops the new process if it started, then puts the previous executable back.
+        void RollBackRestart(const Handle& restarted, const fs::path& target) {
+            if (restarted.value) {
+                if (!TerminateProcess(restarted, 1)) {
+                    auto error = GetLastError();
+
+                    if (WaitForSingleObject(restarted, 0) != WAIT_OBJECT_0)
+                        winrt::throw_hresult(HRESULT_FROM_WIN32(error));
+                }
+
+                if (WaitForSingleObject(restarted, 5000) != WAIT_OBJECT_0)
+                    throw std::runtime_error("The update process could not be stopped to restore the previous version");
+            }
+
+            auto previous = target;
+            previous += L".old";
+            MoveWithRetry(previous, target);
+        }
+
+        void SwapAndRestart(const fs::path& payload, const fs::path& target, HWND applicationWindow, std::stop_token stop) {
+            ReplaceExecutable(payload, target);
+            Handle restarted;
+
+            try {
+                CheckCancelled(stop);
+                restarted.value = Launch(target, L"--restart");
+                CheckCancelled(stop);
+
+                if (!PostMessageW(applicationWindow, ExitMessage, 0, 0))
+                    throw std::runtime_error("The application could not restart for the update");
+            } catch (...) {
+                RollBackRestart(restarted, target);
+                throw;
+            }
+        }
     }
 }
 
@@ -459,65 +530,13 @@ export namespace Lemonsquash {
                             throw std::runtime_error("Invalid update version");
 
                         auto target = ExecutablePath();
-                        auto staging = UpdateCachePath();
-                        std::error_code ignored;
-
-                        fs::remove_all(staging, ignored);
-                        fs::create_directories(staging);
-
-                        auto archive = staging / L"package.zip";
-                        auto payload = staging / L"Lemonsquash.exe";
-
-                        {
-                            std::ofstream output(archive, std::ios::binary);
-
-                            HttpDownload(std::wstring(ServiceUrl) + L"/updates/" + version + L".zip", MaxPackageSize, stop,
-                                [&](std::span<const uint8_t> chunk) {
-                                    output.write(reinterpret_cast<const char*>(chunk.data()), static_cast<std::streamsize>(chunk.size()));
-                                });
-
-                            CheckCancelled(stop);
-                            output.close();
-
-                            if (!output)
-                                throw std::runtime_error("Cannot save the update ZIP; check free space and folder permissions");
-                        }
+                        auto archive = DownloadPackage(version, stop);
 
                         Notify(UpdateState::Installing);
-                        ExtractExecutable(archive, payload, stop);
-                        ValidateExecutable(payload, *expected);
-                        VerifyExecutableSignature(payload);
-                        CheckCancelled(stop);
 
-                        ReplaceExecutable(payload, target);
-                        Handle restarted;
+                        auto payload = PreparePayload(archive, *expected, stop);
 
-                        try {
-                            CheckCancelled(stop);
-                            restarted.value = Launch(target, L"--restart");
-                            CheckCancelled(stop);
-
-                            if (!PostMessageW(applicationWindow, ExitMessage, 0, 0))
-                                throw std::runtime_error("The application could not restart for the update");
-                        } catch (...) {
-                            if (restarted.value) {
-                                if (!TerminateProcess(restarted, 1)) {
-                                    auto error = GetLastError();
-
-                                    if (WaitForSingleObject(restarted, 0) != WAIT_OBJECT_0)
-                                        winrt::throw_hresult(HRESULT_FROM_WIN32(error));
-                                }
-
-                                if (WaitForSingleObject(restarted, 5000) != WAIT_OBJECT_0)
-                                    throw std::runtime_error("The update process could not be stopped to restore the previous version");
-                            }
-
-                            auto previous = target;
-                            previous += L".old";
-                            MoveWithRetry(previous, target);
-                            throw;
-                        }
-
+                        SwapAndRestart(payload, target, applicationWindow, stop);
                         Notify(UpdateState::Restarting);
                     } catch (...) {
                         if (!stop.stop_requested())

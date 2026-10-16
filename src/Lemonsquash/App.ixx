@@ -316,7 +316,6 @@ export namespace Lemonsquash {
                         backend->RequestIcon(id, path);
                 },
                 [this](const Result& item, bool control) { Execute(item, control); },
-                [this] { ShowPreferences(); },
                 [this](HWND, UINT message, WPARAM, LPARAM l) { return Message(message, l); }}) {}
 
         ~App() {

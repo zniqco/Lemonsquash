@@ -84,7 +84,7 @@
     <ClCompile Include="Http.ixx" />
     <ClCompile Include="Calculator.ixx" />
     <ClCompile Include="Common.ixx" />
-    <ClCompile Include="LazyResource.ixx" />
+    <ClCompile Include="UI\LazyResource.ixx" />
     <ClCompile Include="UI\Bitmap.ixx" />
     <ClCompile Include="Search.ixx" />
     <ClCompile Include="Settings.ixx" />

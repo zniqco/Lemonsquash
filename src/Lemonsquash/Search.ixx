@@ -81,7 +81,7 @@ export namespace Lemonsquash {
         std::wstring lowerTag;
         Action action = Action::Shortcut;
         bool hasArguments = false;
-        std::wstring resolvedTarget;
+        std::wstring displayTarget;
         std::vector<SearchAlias> aliases;
     };
 
@@ -93,7 +93,7 @@ export namespace Lemonsquash {
         std::wstring iconPath;
         Action action = Action::Shell;
         bool rewrite = false;
-        std::wstring resolvedTarget;
+        std::wstring displayTarget;
         bool operator==(const Result&) const = default;
     };
 
@@ -149,7 +149,7 @@ export namespace Lemonsquash {
             score += PrefixBonus;
         if (lowerText == lowerQuery)
             score += ExactBonus;
-        // Retain the original one-point-per-character preference for shorter names.
+
         return score - static_cast<int>(text.size());
     }
 }
@@ -247,7 +247,7 @@ namespace Lemonsquash {
             std::vector<Result> results;
             for (size_t index = 0; index < std::min(MaxAppResults, matches.size()); ++index) {
                 const auto& app = *matches[index].app;
-                results.push_back({app.id, app.caption, {}, app.target, app.iconPath, app.action, false, app.resolvedTarget});
+                results.push_back({app.id, app.caption, {}, app.target, app.iconPath, app.action, false, app.displayTarget});
             }
 
             return results;
