@@ -46,25 +46,27 @@ namespace Lemonsquash {
             winrt::com_ptr<IContextMenu3> menuMessageHandlerWithResult;
             std::unique_ptr<std::remove_pointer_t<HMENU>, decltype(&DestroyMenu)> menu{nullptr, DestroyMenu};
 
+            std::string CommandVerb(UINT command) {
+                if (command < FirstCommand || command > LastCommand)
+                    return {};
+
+                wchar_t verb[64]{};
+                auto read = menuCommands->GetCommandString(command - FirstCommand, GCS_VERBW, nullptr,
+                    reinterpret_cast<char*>(verb), 64);
+
+                if (SUCCEEDED(read) && verb[0])
+                    return UTF8(verb);
+
+                char ansiVerb[64]{};
+                read = menuCommands->GetCommandString(command - FirstCommand, GCS_VERBA, nullptr, ansiVerb, 64);
+                return SUCCEEDED(read) ? ansiVerb : std::string{};
+            }
+
             void RemoveCreateShortcut() {
                 for (int position = GetMenuItemCount(menu.get()) - 1; position >= 0; --position) {
                     UINT command = GetMenuItemID(menu.get(), position);
 
-                    if (command < FirstCommand || command > LastCommand)
-                        continue;
-
-                    wchar_t verb[64]{};
-                    auto read = menuCommands->GetCommandString(command - FirstCommand, GCS_VERBW, nullptr,
-                        reinterpret_cast<char*>(verb), 64);
-                    bool createShortcut = SUCCEEDED(read) && std::wstring_view(verb) == L"link";
-
-                    if (FAILED(read) || !verb[0]) {
-                        char ansiVerb[64]{};
-                        read = menuCommands->GetCommandString(command - FirstCommand, GCS_VERBA, nullptr, ansiVerb, 64);
-                        createShortcut = SUCCEEDED(read) && std::string_view(ansiVerb) == "link";
-                    }
-
-                    if (createShortcut)
+                    if (CommandVerb(command) == "link")
                         winrt::check_bool(DeleteMenu(menu.get(), position, MF_BYPOSITION));
                 }
             }
@@ -94,7 +96,8 @@ namespace Lemonsquash {
             }
 
         public:
-            bool Show(HWND owner, const std::wstring& path, POINT position) {
+            bool Show(HWND owner, const std::wstring& path, POINT position,
+                const std::function<void()>& beforeInvoke) {
                 PIDLIST_ABSOLUTE value = nullptr;
                 auto parsed = SHParseDisplayName(path.c_str(), nullptr, &value, 0, nullptr);
                 item.reset(value);
@@ -138,6 +141,13 @@ namespace Lemonsquash {
 
                 if (GetKeyState(VK_SHIFT) & 0x8000)
                     info.fMask |= CMIC_MASK_SHIFT_DOWN;
+
+                beforeInvoke();
+
+                if (Lower(fs::path(path).extension().wstring()) == L".lnk" && CommandVerb(command) == "opencontaining") {
+                    winrt::check_hresult(SHOpenFolderAndSelectItems(item.get(), 0, nullptr, 0));
+                    return true;
+                }
 
                 auto invoked = menuCommands->InvokeCommand(reinterpret_cast<CMINVOKECOMMANDINFO*>(&info));
 
@@ -479,15 +489,15 @@ export namespace Lemonsquash {
                 } reset{contextMenu};
 
                 contextMenu = &menu;
-                executed = menu.Show(handle, path, position);
+                executed = menu.Show(handle, path, position, [this] { Hide(false, false); });
             }
 
             GetCursorPos(&lastMouse);
             ignoreMouse = true;
 
             if (executed)
-                Hide(true);
-            else if (GetForegroundWindow() != handle && !hiding)
+                clearOnShow = true;
+            else if (IsVisible() && GetForegroundWindow() != handle)
                 Hide(false);
         }
 
@@ -1170,16 +1180,19 @@ export namespace Lemonsquash {
             }
         }
 
-        void Hide(bool clear) {
+        void Hide(bool clear, bool animate = true) {
             if (hiding) {
                 clearOnShow = clearOnShow || clear;
-                return;
+
+                if (animate)
+                    return;
+            } else {
+                clearOnShow = clear;
             }
 
-            clearOnShow = clear;
             hiding = true;
 
-            if (IsWindowVisible(handle) && AnimationsEnabled()) {
+            if (animate && IsWindowVisible(handle) && AnimationsEnabled()) {
                 StartFade(0);
             } else {
                 fadeTo = 0;
