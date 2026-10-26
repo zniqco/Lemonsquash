@@ -171,6 +171,15 @@ export namespace Lemonsquash {
         return path;
     }
 
+    fs::path UserProfilePath() {
+        PWSTR value = nullptr;
+        auto result = SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &value);
+        std::unique_ptr<wchar_t, decltype(&CoTaskMemFree)> path(value, CoTaskMemFree);
+        winrt::check_hresult(result);
+
+        return path.get();
+    }
+
     fs::path AppDataPath() {
         PWSTR path = nullptr;
         winrt::check_hresult(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &path));
@@ -206,10 +215,12 @@ export namespace Lemonsquash {
         std::unique_ptr<std::remove_pointer_t<PIDLIST_ABSOLUTE>, decltype(&CoTaskMemFree)> item(value, CoTaskMemFree);
         winrt::check_hresult(result);
 
+        auto directory = UserProfilePath();
         SHELLEXECUTEINFOW info{sizeof(info)};
         info.fMask = SEE_MASK_INVOKEIDLIST | SEE_MASK_FLAG_NO_UI;
         info.hwnd = owner;
         info.lpIDList = item.get();
+        info.lpDirectory = directory.c_str();
         info.nShow = SW_SHOWNORMAL;
 
         if (!ShellExecuteExW(&info)) {
@@ -221,12 +232,14 @@ export namespace Lemonsquash {
     }
 
     void OpenTarget(HWND owner, const std::wstring& target, const std::wstring& arguments = {}, bool elevate = false) {
+        auto directory = UserProfilePath();
         SHELLEXECUTEINFOW info{sizeof(info)};
         info.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_ASYNCOK;
         info.hwnd = owner;
         info.lpVerb = elevate ? L"runas" : L"open";
         info.lpFile = target.c_str();
         info.lpParameters = arguments.empty() ? nullptr : arguments.c_str();
+        info.lpDirectory = directory.c_str();
         info.nShow = SW_SHOWNORMAL;
 
         if (!ShellExecuteExW(&info)) {

@@ -128,11 +128,13 @@ namespace Lemonsquash {
                 if (!command)
                     return false;
 
+                auto directory = UserProfilePath();
                 CMINVOKECOMMANDINFOEX info{sizeof(info)};
                 info.fMask = CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE;
                 info.hwnd = owner;
                 info.lpVerb = MAKEINTRESOURCEA(command - FirstCommand);
                 info.lpVerbW = MAKEINTRESOURCEW(command - FirstCommand);
+                info.lpDirectoryW = directory.c_str();
                 info.nShow = SW_SHOWNORMAL;
                 info.ptInvoke = position;
 
