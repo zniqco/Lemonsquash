@@ -37,6 +37,14 @@ export namespace Lemonsquash {
 
         void Initialize() {
             auto window = mainDialog.Handle();
+
+            backend = std::make_unique<Backend>(window);
+            updater = std::make_unique<Updater>([window] { PostMessageW(window, UpdateMessage, 0, 0); });
+            preferences = std::make_unique<PreferencesDialog>(
+                instance, [this](const Settings& value, bool startup) { return ApplySettings(value, startup); },
+                [this] { RegisterShortcut(settings); });
+            about = std::make_unique<AboutDialog>(instance, *updater);
+
             trayMenu = CreatePopupMenu();
             winrt::check_bool(trayMenu != nullptr);
             winrt::check_bool(AppendMenuW(trayMenu, MF_STRING, MenuPreferences, L"Preferences"));
@@ -61,13 +69,6 @@ export namespace Lemonsquash {
                     Log(L"Could not save tutorial state");
                 }
             }
-
-            backend = std::make_unique<Backend>(window);
-            updater = std::make_unique<Updater>([window] { PostMessageW(window, UpdateMessage, 0, 0); });
-            preferences = std::make_unique<PreferencesDialog>(
-                instance, [this](const Settings& value, bool startup) { return ApplySettings(value, startup); },
-                [this] { RegisterShortcut(settings); });
-            about = std::make_unique<AboutDialog>(instance, *updater);
         }
 
         void Execute(const Result& item, bool control) {

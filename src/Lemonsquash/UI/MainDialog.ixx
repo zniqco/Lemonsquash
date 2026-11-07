@@ -237,8 +237,10 @@ export namespace Lemonsquash {
         UINT dpi = 96, fontDpi = 0;
         float scale = 1.0f;
         bool suppressQuery = false, composing = false, clearOnShow = true;
-        bool ignoreMouse = false, hiding = false, bufferedPaint = false;
-        bool fading = false;
+        bool ignoreMouse = false, bufferedPaint = false;
+
+        enum class Visibility { Hidden, FadingIn, Shown, FadingOut };
+        Visibility visibility = Visibility::Hidden;
         ULONGLONG fadeStarted = 0;
         BYTE opacity = 255, fadeFrom = 0, fadeTo = 255;
         int selectedIndex = 0, topIndex = 0, visibleRows = 0, wheelDelta = 0;
@@ -443,7 +445,7 @@ export namespace Lemonsquash {
         }
 
         void ShowContextMenu(POINT position) {
-            if (hiding || contextMenu || results.empty())
+            if (!IsVisible() || contextMenu || results.empty())
                 return;
 
             int index = selectedIndex;
@@ -754,7 +756,7 @@ export namespace Lemonsquash {
         }
 
         void Execute() {
-            if (hiding || selectedIndex >= static_cast<int>(results.size()))
+            if (!IsVisible() || selectedIndex >= static_cast<int>(results.size()))
                 return;
 
             auto item = results[selectedIndex];
@@ -778,23 +780,24 @@ export namespace Lemonsquash {
 
         void FinishFade() {
             KillTimer(handle, FadeTimerId);
-            fading = false;
             SetOpacity(fadeTo);
 
-            if (hiding) {
+            if (visibility == Visibility::FadingOut) {
+                visibility = Visibility::Hidden;
                 ShowWindow(handle, SW_HIDE);
-                hiding = false;
                 SetOpacity(255);
+            } else {
+                visibility = Visibility::Shown;
             }
         }
 
-        void StartFade(BYTE target) {
+        void StartFade(Visibility fade, BYTE target, bool animate = true) {
+            visibility = fade;
             fadeFrom = opacity;
             fadeTo = target;
             fadeStarted = GetTickCount64();
-            fading = fadeFrom != fadeTo && SetTimer(handle, FadeTimerId, 15, nullptr) != 0;
 
-            if (!fading)
+            if (!animate || fadeFrom == fadeTo || !SetTimer(handle, FadeTimerId, 15, nullptr))
                 FinishFade();
         }
 
@@ -828,7 +831,7 @@ export namespace Lemonsquash {
 
                 case WM_TIMER: {
                     if (w == FadeTimerId) {
-                        if (fading) {
+                        if (visibility == Visibility::FadingIn || visibility == Visibility::FadingOut) {
                             auto elapsed = GetTickCount64() - fadeStarted;
 
                             if (elapsed >= FadeDuration) {
@@ -883,7 +886,7 @@ export namespace Lemonsquash {
                 }
 
                 case WM_ACTIVATE: {
-                    if (LOWORD(w) == WA_INACTIVE && !hiding && !contextMenu)
+                    if (LOWORD(w) == WA_INACTIVE && IsVisible() && !contextMenu)
                         Hide(false);
 
                     return 0;
@@ -960,7 +963,7 @@ export namespace Lemonsquash {
 
                 case WM_DESTROY: {
                     KillTimer(handle, FadeTimerId);
-                    fading = false;
+                    visibility = Visibility::Hidden;
 
                     break;
                 }
@@ -1010,7 +1013,7 @@ export namespace Lemonsquash {
         static LRESULT CALLBACK InputProc(HWND control, UINT message, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR data) {
             auto self = reinterpret_cast<MainDialog*>(data);
 
-            if (self->hiding && ((message >= WM_KEYFIRST && message <= WM_KEYLAST) ||
+            if (!self->IsVisible() && ((message >= WM_KEYFIRST && message <= WM_KEYLAST) ||
                 (message >= WM_MOUSEFIRST && message <= WM_MOUSELAST)))
                 return 0;
 
@@ -1136,7 +1139,7 @@ export namespace Lemonsquash {
         }
 
         bool IsVisible() const {
-            return IsWindowVisible(handle) && !hiding;
+            return visibility == Visibility::FadingIn || visibility == Visibility::Shown;
         }
 
         void RefreshTheme() {
@@ -1154,12 +1157,11 @@ export namespace Lemonsquash {
         }
 
         void Show() {
-            bool visible = IsWindowVisible(handle) != FALSE;
+            bool wasHidden = visibility == Visibility::Hidden;
             bool animate = AnimationsEnabled();
 
             KillTimer(handle, FadeTimerId);
-            fading = false;
-            hiding = false;
+            visibility = Visibility::Shown;
             Layout(true);
 
             if (clearOnShow)
@@ -1167,7 +1169,7 @@ export namespace Lemonsquash {
             else
                 SendMessageW(input, EM_SETSEL, 0, -1);
 
-            if (!visible || !animate)
+            if (wasHidden || !animate)
                 SetOpacity(animate ? 0 : 255);
 
             ShowWindow(handle, SW_SHOW);
@@ -1176,30 +1178,19 @@ export namespace Lemonsquash {
             GetCursorPos(&lastMouse);
             ignoreMouse = true;
 
-            if (animate && !hiding && IsWindowVisible(handle) && opacity < 255) {
+            if (animate && visibility == Visibility::Shown && opacity < 255) {
                 RedrawWindow(handle, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
-                StartFade(255);
+                StartFade(Visibility::FadingIn, 255);
             }
         }
 
         void Hide(bool clear, bool animate = true) {
-            if (hiding) {
-                clearOnShow = clearOnShow || clear;
+            clearOnShow = IsVisible() ? clear : clearOnShow || clear;
 
-                if (animate)
-                    return;
-            } else {
-                clearOnShow = clear;
-            }
+            if (visibility == Visibility::Hidden || (visibility == Visibility::FadingOut && animate))
+                return;
 
-            hiding = true;
-
-            if (animate && IsWindowVisible(handle) && AnimationsEnabled()) {
-                StartFade(0);
-            } else {
-                fadeTo = 0;
-                FinishFade();
-            }
+            StartFade(Visibility::FadingOut, 0, animate && AnimationsEnabled());
         }
 
         void Receive(BackendUpdate update) {
