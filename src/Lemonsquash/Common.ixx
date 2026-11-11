@@ -4,6 +4,7 @@ module;
 #include "Version.h"
 #include <cwctype>
 #include <type_traits>
+#include <userenv.h>
 
 export module lemonsquash.common;
 
@@ -290,6 +291,56 @@ export namespace Lemonsquash {
             return std::wstring(winrt::to_hstring(std::string_view(error.what())));
         } catch (...) {
             return L"Unknown error";
+        }
+    }
+
+    bool IsEnvironmentSettingChange(LPARAM l) {
+        auto setting = reinterpret_cast<const wchar_t*>(l);
+
+        return setting && CompareStringOrdinal(setting, -1, L"Environment", -1, TRUE) == CSTR_EQUAL;
+    }
+
+    void RefreshEnvironment() noexcept {
+        try {
+            auto parse = [](const wchar_t* entry) {
+                std::vector<std::pair<std::wstring, std::wstring>> variables;
+
+                for (; *entry; entry += wcslen(entry) + 1) {
+                    std::wstring_view text(entry);
+                    auto separator = text.find(L'=', 1); // Per-drive current directories are stored under names like "=C:"
+
+                    if (separator != std::wstring_view::npos)
+                        variables.emplace_back(text.substr(0, separator), text.substr(separator + 1));
+                }
+
+                return variables;
+            };
+
+            Handle token;
+            winrt::check_bool(OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_DUPLICATE, &token.value));
+
+            void* created = nullptr;
+            winrt::check_bool(CreateEnvironmentBlock(&created, token, FALSE));
+            std::unique_ptr<void, decltype(&DestroyEnvironmentBlock)> block(created, DestroyEnvironmentBlock);
+            auto fresh = parse(static_cast<const wchar_t*>(block.get()));
+
+            std::unique_ptr<wchar_t, decltype(&FreeEnvironmentStringsW)> current(GetEnvironmentStringsW(),
+                FreeEnvironmentStringsW);
+            winrt::check_bool(current != nullptr);
+
+            for (auto& stale : parse(current.get())) {
+                bool kept = stale.first.starts_with(L'=') || std::ranges::any_of(fresh, [&](auto& variable) {
+                    return CompareStringOrdinal(stale.first.c_str(), -1, variable.first.c_str(), -1, TRUE) == CSTR_EQUAL;
+                });
+
+                if (!kept)
+                    SetEnvironmentVariableW(stale.first.c_str(), nullptr);
+            }
+
+            for (auto& variable : fresh)
+                SetEnvironmentVariableW(variable.first.c_str(), variable.second.c_str());
+        } catch (...) {
+            Log(L"Could not refresh environment: " + ExceptionText());
         }
     }
 

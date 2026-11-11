@@ -874,6 +874,8 @@ export namespace Lemonsquash {
                 case WM_SETTINGCHANGE: {
                     if (IsThemeSettingChange(w, l))
                         Theme();
+                    else if (IsEnvironmentSettingChange(l))
+                        RefreshEnvironment();
 
                     return 0;
                 }

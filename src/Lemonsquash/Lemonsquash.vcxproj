@@ -56,7 +56,7 @@
     </ResourceCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>ole32.lib;oleaut32.lib;shell32.lib;shlwapi.lib;propsys.lib;advapi32.lib;user32.lib;gdi32.lib;windowsapp.lib;d2d1.lib;dwrite.lib;dwmapi.lib;comctl32.lib;windowscodecs.lib;winhttp.lib;version.lib;oleacc.lib;uuid.lib;msimg32.lib;uxtheme.lib;wintrust.lib;crypt32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ole32.lib;oleaut32.lib;shell32.lib;shlwapi.lib;propsys.lib;advapi32.lib;user32.lib;gdi32.lib;windowsapp.lib;d2d1.lib;dwrite.lib;dwmapi.lib;comctl32.lib;windowscodecs.lib;winhttp.lib;version.lib;oleacc.lib;uuid.lib;msimg32.lib;uxtheme.lib;wintrust.lib;crypt32.lib;userenv.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
